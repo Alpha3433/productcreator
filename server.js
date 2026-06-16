@@ -2,7 +2,7 @@
 
 const path = require('path');
 const express = require('express');
-const { config, publicConfig } = require('./src/config');
+const { config, publicConfig, authMode } = require('./src/config');
 const launchRouter = require('./src/routes/launch');
 
 const app = express();
@@ -25,8 +25,18 @@ app.listen(config.port, () => {
   console.log(`  Store:       ${config.store || '(not set — edit .env)'}`);
   console.log(`  API version: ${config.apiVersion}`);
   console.log(`  Master:      ${config.masterProductId || '(not set — edit .env)'}`);
-  if (!config.adminToken) {
-    console.log('  WARNING: SHOPIFY_ADMIN_TOKEN is not set — live launches will fail (dry-run still works).');
+  const mode = authMode();
+  console.log(
+    `  Auth:        ${
+      mode === 'client_credentials'
+        ? 'client credentials (Dev Dashboard)'
+        : mode === 'static_token'
+        ? 'static admin token (legacy)'
+        : 'NONE — set credentials in .env'
+    }`
+  );
+  if (mode === 'none') {
+    console.log('  WARNING: no credentials set — live launches will fail (dry-run still works).');
   }
   console.log('');
 });

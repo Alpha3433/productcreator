@@ -23,9 +23,9 @@ fetch('/api/config')
     appConfig = cfg;
     const store = document.getElementById('cfg-store');
     if (cfg.store) store.textContent = `— ${cfg.store}`;
-    if (!cfg.hasToken) {
+    if (!cfg.hasCredentials) {
       showFormErrors([
-        'No admin token configured (.env). Live launches will fail — but you can still use Dry run.',
+        'No Shopify credentials configured (.env). Live launches will fail — but you can still use Dry run.',
       ]);
     }
   })

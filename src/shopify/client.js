@@ -1,6 +1,7 @@
 'use strict';
 
-const { config } = require('../config');
+const { config, authMode } = require('../config');
+const { getAccessToken, clearTokenCache } = require('./auth');
 
 // Small sleep helper used for backoff.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -52,9 +53,21 @@ async function safeBody(res) {
 async function shopifyGraphQL(query, variables = {}, opts = {}) {
   const maxRetries = opts.maxRetries ?? 5;
   let attempt = 0;
+  let refreshedAuth = false;
 
   while (true) {
     attempt += 1;
+
+    // Resolve a valid access token for the active auth mode (client-credentials
+    // tokens are fetched/cached/refreshed here; a legacy static token is used
+    // as-is). Token-acquisition failures are surfaced cleanly.
+    let token;
+    try {
+      token = await getAccessToken();
+    } catch (e) {
+      throw new ShopifyError(e.message, e.details);
+    }
+
     let res;
     try {
       res = await fetch(config.graphqlEndpoint(), {
@@ -62,7 +75,7 @@ async function shopifyGraphQL(query, variables = {}, opts = {}) {
         headers: {
           'Content-Type': 'application/json',
           // Token sent ONLY here — never logged.
-          'X-Shopify-Access-Token': config.adminToken,
+          'X-Shopify-Access-Token': token,
         },
         body: JSON.stringify({ query, variables }),
       });
@@ -86,6 +99,15 @@ async function shopifyGraphQL(query, variables = {}, opts = {}) {
         status: res.status,
         body: await safeBody(res),
       });
+    }
+
+    // A 401 in client-credentials mode usually means the cached token expired or
+    // was revoked — refresh once before treating it as a hard failure.
+    if (res.status === 401 && authMode() === 'client_credentials' && !refreshedAuth) {
+      refreshedAuth = true;
+      clearTokenCache();
+      attempt -= 1; // don't let this consume a retry slot
+      continue;
     }
 
     if (!res.ok) {

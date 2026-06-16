@@ -53,6 +53,12 @@ When you press **Launch product**, the backend runs this sequence
 6. **Return** the new product's admin URL, storefront URL, and any warnings
    (including the bundle reminder).
 
+> **Authentication:** every call uses the `X-Shopify-Access-Token` header. With a
+> Dev Dashboard app, `src/shopify/auth.js` exchanges your Client ID + Secret for a
+> 24h token (client credentials grant) and refreshes it automatically; a legacy
+> `shpat_` token is used directly. See [Get and store your
+> credentials](#2-get-and-store-your-credentials).
+
 > **API version:** pinned to **2025-10** via `SHOPIFY_API_VERSION`. Each mutation
 > is commented in `src/shopify/queries.js`. Signatures were verified against
 > `https://shopify.dev/docs/api/admin-graphql/2025-10` — re-check there if you
@@ -64,18 +70,24 @@ When you press **Launch product**, the backend runs this sequence
 ## Requirements
 
 - **Node.js 18.17+** (uses the built-in `fetch`/`FormData`; Node 20/22 also fine).
-- A Shopify store where you can create a **custom app** (store owner / staff with
-  app-development permission).
+- A Shopify store + a Shopify account that can create an app in the **Dev
+  Dashboard** (dev.shopify.com).
+
+> **Heads up — Shopify changed this on 2026-01-01.** You can no longer create
+> *legacy custom apps with a permanent `shpat_` token* from the store admin. New
+> apps live in the **Dev Dashboard** and give you a **Client ID + Client Secret**,
+> which you exchange for a short-lived (24h) access token via the **client
+> credentials grant**. **This tool does that exchange and refresh for you** — you
+> just provide the Client ID + Secret. (If you still have a working legacy
+> `shpat_` token, [Option B](#option-b-legacy-static-token) also works.)
 
 ---
 
-## 1. Create the Shopify custom app + scopes
+## 1. Create the Dev Dashboard app + scopes
 
-1. In Shopify admin: **Settings → Apps and sales channels → Develop apps**.
-   (If you don't see it, click **Allow custom app development** first.)
-2. **Create an app** → give it a name like `Product Launcher`.
-3. Open **Configuration → Admin API integration → Configure** and grant these
-   **Admin API access scopes**:
+1. Go to **https://dev.shopify.com** → **Apps** → **Create app** (name it
+   `Product Launcher`). Connect it to your store/organization.
+2. In the app's **API access / scopes** configuration, grant:
 
    | Scope | Why |
    | --- | --- |
@@ -86,31 +98,44 @@ When you press **Launch product**, the backend runs this sequence
    | `write_publications` | Publish / schedule the product |
    | `write_discounts` | *Optional* — only if you automate adding products to a product-scoped volume discount (see [Bundle](#bundle-the-old-glory-theme)) |
 
-4. **Save**.
+3. **Save** / release the configuration so the scopes are active.
+
+> The client credentials grant issues a token **for the store the app is
+> installed on / owned by**. Make sure the app is associated with your store.
 
 ---
 
-## 2. Get and store the admin token
+## 2. Get and store your credentials
 
-1. On the app's **API credentials** tab, click **Install app**.
-2. Copy the **Admin API access token** (shown once, starts with `shpat_…`).
-3. Paste it into your local `.env` as `SHOPIFY_ADMIN_TOKEN` (next section).
+### Option A — Dev Dashboard app (recommended)
 
-> **Use the right value.** This must be a **custom-app Admin API access token**.
-> Do **not** use:
-> - the **API secret key** (`shpss_…`) from the same page — that's for
->   OAuth/webhook verification;
-> - a **Headless / Storefront API** token (public or private) — those only reach
->   the read-only Storefront API and **cannot** run the Admin mutations
->   (`productDuplicate`, `productUpdate`, …) this tool needs, even though the
->   private one is also `shpat_…`-prefixed.
->
-> The token you want is revealed **once** when you click **Install app** on the
-> custom app's *API credentials* tab.
+1. Dev Dashboard → your app → **Settings** → copy the **Client ID** and
+   **Client Secret**.
+2. Put them in your local `.env`:
+   ```dotenv
+   SHOPIFY_CLIENT_ID=your-client-id
+   SHOPIFY_CLIENT_SECRET=your-client-secret
+   ```
+3. That's it — the tool calls `POST /admin/oauth/access_token`
+   (`grant_type=client_credentials`) to mint a 24h `shpat_…` token and refreshes
+   it automatically. You never paste a token.
 
-> You paste this yourself, locally. It is never committed, logged, printed, or
-> shown in the UI. If you ever leak it (e.g. paste it into a chat),
-> **uninstall/reinstall** the app to rotate it immediately.
+### Option B — legacy static token
+
+Only if you already have a working permanent token from an older custom app:
+```dotenv
+SHOPIFY_ADMIN_TOKEN=shpat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+> **Don't confuse credentials.** The **Client Secret** (`shpss_…`) is *not* a
+> token — it's half of what mints one. Also do **not** use a **Headless /
+> Storefront** token (public or private): those only reach the read-only
+> Storefront API and can't run the Admin mutations this tool needs, even though
+> the private one is `shpat_…`-prefixed.
+
+> Everything secret stays in `.env` (git-ignored). It is never committed, logged,
+> printed, or shown in the UI. If you leak a secret (e.g. paste it into a chat),
+> **rotate it** in the Dev Dashboard immediately.
 
 ---
 
@@ -141,13 +166,19 @@ Then edit `.env`:
 
 ```dotenv
 SHOPIFY_STORE=your-store.myshopify.com
-SHOPIFY_ADMIN_TOKEN=shpat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Option A (recommended): Dev Dashboard app
+SHOPIFY_CLIENT_ID=your-client-id
+SHOPIFY_CLIENT_SECRET=your-client-secret
+# Option B (legacy): a permanent token instead of A
+# SHOPIFY_ADMIN_TOKEN=shpat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
 SHOPIFY_API_VERSION=2025-10
 MASTER_PRODUCT_ID=gid://shopify/Product/1234567890
 
 # Bundle extension point (see below)
 BUNDLE_AUTOMATION_ENABLED=false
-BUNDLE_APP_NAME=your bundle app
+BUNDLE_APP_NAME=
 
 PORT=3000
 ```
@@ -254,11 +285,13 @@ The **Async duplicate** toggle switches to `synchronous: false` and polls the
 
 ## Security notes
 
-- The admin token is read from `process.env` only. It is **never** committed,
-  logged, returned to the browser, or included in error messages.
+- All secrets (client secret / admin token / minted access tokens) are read from
+  `process.env` only. They are **never** committed, logged, returned to the
+  browser, or included in error messages. Minted access tokens are held in memory
+  and refreshed on expiry.
 - `.env` is in `.gitignore`; only `.env.example` (no real values) is committed.
 - The server only exposes non-secret config (`/api/config` returns store, API
-  version, master id, and bundle settings — never the token).
+  version, master id, bundle settings, and the auth *mode* — never a secret).
 - This is an **internal, local** tool. It has no auth of its own — run it on
   your machine, not on a public server.
 
@@ -268,7 +301,8 @@ The **Async duplicate** toggle switches to `synchronous: false` and polls the
 
 | Symptom | Likely cause / fix |
 | --- | --- |
-| `Request failed (HTTP 403)` … `Likely a bad/expired token, a missing scope, or a network egress/allowlist block` | Check the `body` in the error details. If it says **"Host not in allowlist: …"** the block is your network/firewall (e.g. running inside a sandbox with an egress allowlist), **not** Shopify — allow `*.myshopify.com`. Otherwise it is the **wrong token type** (use the **`shpat_…`** Admin API access token, not the `shpss_…` API secret key or a Headless **Storefront** token), a missing scope, or an expired token. |
+| `Could not obtain an access token (HTTP 401/403)` | Wrong **Client ID / Client Secret**, or the app isn't associated with this store. Copy them again from Dev Dashboard → your app → **Settings**. Don't paste the secret into `SHOPIFY_ADMIN_TOKEN`. |
+| `Request failed (HTTP 403)` … `network egress/allowlist block` | Check the `body` in the error details. If it says **"Host not in allowlist: …"** the block is your network/firewall (e.g. a sandbox with an egress allowlist), **not** Shopify — allow `*.myshopify.com`. Otherwise it's a missing scope or a Storefront token used by mistake. |
 | `Could not find the Online Store publication` | The store has no Online Store channel, or the app lacks `read_publications`. |
 | `MASTER_PRODUCT_ID should look like gid://...` | Wrap the numeric id: `gid://shopify/Product/123`. |
 | Throttled / rate-limited | The client backs off and retries automatically; only fails after repeated throttling. |
@@ -286,17 +320,20 @@ The **Async duplicate** toggle switches to `synchronous: false` and polls the
 ├── .env.example              # copy to .env (git-ignored)
 ├── .gitignore
 ├── README.md
+├── scripts/
+│   └── check.js              # `npm run check` — read-only setup self-test
 ├── public/                   # single-page UI (vanilla HTML/CSS/JS)
 │   ├── index.html
 │   ├── styles.css
 │   └── app.js
 └── src/
-    ├── config.js             # loads + validates env (token never leaves here)
+    ├── config.js             # loads + validates env; auth mode (no secrets leak)
     ├── bundle.js             # applyBundle() extension-point stub
     ├── routes/
     │   └── launch.js         # POST /api/launch (multipart upload + validation)
     └── shopify/
-        ├── client.js         # GraphQL client: throttle/HTTP retry, staged upload
+        ├── auth.js           # client-credentials token mint + cache/refresh
+        ├── client.js         # GraphQL client: auth, throttle/HTTP retry, uploads
         ├── queries.js        # all GraphQL operations (commented, version-pinned)
         └── launch.js         # the launch orchestration (duplicate → publish)
 ```
