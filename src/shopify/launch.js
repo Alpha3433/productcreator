@@ -118,17 +118,24 @@ async function runLaunch(input) {
   const publishResult = await publish(productId, input.status, input.publishDate);
   if (publishResult.warning) warnings.push(publishResult.warning);
 
-  // 6) Bundle app (extension point).
+  // 6) Bundle (extension point). In the "Old Glory" theme the bundle offer
+  //    cards are NATIVE theme section blocks defined on the template, so they
+  //    copy automatically once templateSuffix matches (done in step 2). The
+  //    only thing that may not carry over is the Shopify automatic volume
+  //    discount that makes the savings real — verify it covers this product.
   if (config.bundleAutomationEnabled) {
     try {
       await applyBundle(productId);
     } catch (e) {
-      warnings.push(
-        `Bundle automation failed: ${e.message} — set it up manually in ${config.bundleAppName}.`
-      );
+      warnings.push(`Bundle automation failed: ${e.message}`);
     }
   } else {
-    warnings.push(`Set up the bundle manually for this product in ${config.bundleAppName}.`);
+    const suffix = product.templateSuffix || '(default)';
+    warnings.push(
+      `Bundle offer cards come from the "${suffix}" theme template and copy automatically. ` +
+        `Confirm your Shopify automatic volume discount covers this product (Admin → Discounts).` +
+        (config.bundleAppName ? ` Notes: ${config.bundleAppName}.` : '')
+    );
   }
 
   // 7) Re-read final state so the returned links/status are accurate.
@@ -308,7 +315,7 @@ function dryRunPlan(input) {
   steps.push({
     call: config.bundleAutomationEnabled
       ? 'applyBundle(newProductId)'
-      : 'skip bundle automation (manual reminder shown)',
+      : 'skip bundle automation (theme bundle cards copy via templateSuffix; discount reminder shown)',
   });
 
   return {
@@ -317,7 +324,10 @@ function dryRunPlan(input) {
     plan: steps,
     warnings: config.bundleAutomationEnabled
       ? []
-      : [`Set up the bundle manually for this product in ${config.bundleAppName}.`],
+      : [
+          'Bundle offer cards copy automatically with the theme template. ' +
+            'Confirm your Shopify automatic volume discount covers the new product (Admin → Discounts).',
+        ],
   };
 }
 

@@ -84,6 +84,7 @@ When you press **Launch product**, the backend runs this sequence
    | `write_files` | Upload the design images (staged uploads) |
    | `read_publications` | Find the Online Store publication |
    | `write_publications` | Publish / schedule the product |
+   | `write_discounts` | *Optional* — only if you automate adding products to a product-scoped volume discount (see [Bundle](#bundle-the-old-glory-theme)) |
 
 4. **Save**.
 
@@ -95,8 +96,13 @@ When you press **Launch product**, the backend runs this sequence
 2. Copy the **Admin API access token** (shown once, starts with `shpat_…`).
 3. Paste it into your local `.env` as `SHOPIFY_ADMIN_TOKEN` (next section).
 
+> **Use the right value.** The token starts with **`shpat_`**. Do **not** use the
+> **API key** or the **API secret key** (`shpss_…`) from the same page — those are
+> for OAuth/webhook verification and will be rejected with a 403 by this tool.
+
 > You paste this yourself, locally. It is never committed, logged, printed, or
-> shown in the UI. If you ever leak it, **uninstall/reinstall** the app to rotate it.
+> shown in the UI. If you ever leak it (e.g. paste it into a chat),
+> **uninstall/reinstall** the app to rotate it immediately.
 
 ---
 
@@ -185,17 +191,33 @@ session are listed at the bottom.
 
 These are built as clearly-marked stubs/toggles.
 
-### Bundle app (the big one)
+### Bundle (the "Old Glory" theme)
 
-`productDuplicate` only clones **native Shopify** data. If your product page has
-a bundle (e.g. "1 Flag / 2 Flags") powered by a third-party app, that config
-lives in the app and is **not** copied.
+Good news: in your **"Old Glory"** theme the "1 Flag / 2 Flags"
+(*Single / Patriot Pair / Family Set*) bundle is **not a third-party app**. It is
+built natively into the theme as section blocks of `type: "bundle"` in
+`sections/main-product.liquid`, configured on the **product template**
+(`product.flag.json` / `product.landing.json`).
 
-- Default: `BUNDLE_AUTOMATION_ENABLED=false` → the success card reminds you to
-  *"Set up the bundle manually for this product in `<BUNDLE_APP_NAME>`."*
-- To automate: set `BUNDLE_AUTOMATION_ENABLED=true` and implement
-  **`applyBundle(newProductId)`** in **`src/bundle.js`** using your bundle app's
-  API. Keep any app token in `.env` (e.g. `BUNDLE_APP_TOKEN`) — never hardcode it.
+Because those blocks live on the **template** (shared by every product using that
+`templateSuffix`), they **copy across automatically** the moment the new
+product's `templateSuffix` matches the master — which the launch flow already
+guarantees in step 2. So normally there is **nothing to do**.
+
+The one piece that does *not* live on the product is the **savings**: the theme's
+own help text says to pair the bundle cards with a **Shopify automatic volume
+discount** (Admin → **Discounts → Amount off products → quantity minimum**).
+
+- If that discount targets **all products** (or a collection the new product
+  joins) → nothing to do; it just works.
+- If it targets **specific products** → add the new product to the discount.
+
+The success card reminds you to verify this after each launch.
+
+**Optional automation** (only needed for a product-scoped discount): set
+`BUNDLE_AUTOMATION_ENABLED=true`, add `AUTOMATIC_DISCOUNT_ID` and the
+`write_discounts` scope, and implement **`applyBundle(newProductId)`** in
+**`src/bundle.js`** (a `discountAutomaticBasicUpdate` example is in the file).
 
 ### POD mode
 
@@ -232,7 +254,7 @@ The **Async duplicate** toggle switches to `synchronous: false` and polls the
 
 | Symptom | Likely cause / fix |
 | --- | --- |
-| `Shopify rejected the request (auth/scope)` | Token wrong/expired, or a scope is missing. Re-check [scopes](#1-create-the-shopify-custom-app--scopes), reinstall the app, update `.env`. |
+| `Shopify rejected the request (auth/scope)` (403) | Most often the **wrong token type** — make sure `SHOPIFY_ADMIN_TOKEN` is the **`shpat_…`** Admin API access token, *not* the `shpss_…` API secret key. Otherwise a scope is missing or the token expired: re-check [scopes](#1-create-the-shopify-custom-app--scopes), reinstall the app, update `.env`. |
 | `Could not find the Online Store publication` | The store has no Online Store channel, or the app lacks `read_publications`. |
 | `MASTER_PRODUCT_ID should look like gid://...` | Wrap the numeric id: `gid://shopify/Product/123`. |
 | Throttled / rate-limited | The client backs off and retries automatically; only fails after repeated throttling. |

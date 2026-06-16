@@ -15,7 +15,7 @@ const config = {
   masterProductId: (process.env.MASTER_PRODUCT_ID || '').trim(),
   bundleAutomationEnabled:
     String(process.env.BUNDLE_AUTOMATION_ENABLED || 'false').toLowerCase() === 'true',
-  bundleAppName: (process.env.BUNDLE_APP_NAME || 'your bundle app').trim(),
+  bundleAppName: (process.env.BUNDLE_APP_NAME || '').trim(),
   port: Number(process.env.PORT || 3000),
 };
 
