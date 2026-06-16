@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Product Launcher</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="head">
+        <h1>🚀 Product Launcher</h1>
+        <p class="sub">
+          One click to clone your master product for today's design.
+          <span id="cfg-store" class="muted"></span>
+        </p>
+      </header>
+
+      <form id="launch-form" class="card" autocomplete="off">
+        <!-- Mode -------------------------------------------------------- -->
+        <fieldset class="row">
+          <legend>Mode</legend>
+          <label class="radio">
+            <input type="radio" name="mode" value="DUPLICATE" checked />
+            Duplicate master
+          </label>
+          <label class="radio">
+            <input type="radio" name="mode" value="EXISTING" />
+            Existing product (POD)
+          </label>
+        </fieldset>
+
+        <!-- Existing product id (EXISTING mode only) ------------------- -->
+        <div class="field hidden" id="existing-field">
+          <label for="existingProductId">Existing product ID</label>
+          <input
+            type="text"
+            id="existingProductId"
+            name="existingProductId"
+            placeholder="gid://shopify/Product/123  or  123"
+          />
+          <small class="muted">From Printful/Printify, etc. Numeric id or full gid.</small>
+        </div>
+
+        <!-- Title ------------------------------------------------------- -->
+        <div class="field">
+          <label for="title">Product title <span class="req">*</span></label>
+          <input type="text" id="title" name="title" placeholder="Day 47 — Eagle Flag Tee" />
+        </div>
+
+        <!-- Images ------------------------------------------------------ -->
+        <div class="field" id="images-field">
+          <label for="images">Design image(s) <span class="req" id="img-req">*</span></label>
+          <input type="file" id="images" name="images" accept="image/*" multiple />
+          <small class="muted" id="img-hint">PNG/JPG. You can select more than one.</small>
+        </div>
+
+        <!-- Price override --------------------------------------------- -->
+        <div class="field">
+          <label for="priceOverride">Price override <span class="muted">(optional)</span></label>
+          <input type="number" id="priceOverride" name="priceOverride" step="0.01" min="0" placeholder="Leave blank to keep master pricing" />
+          <small class="muted">Applies to every variant.</small>
+        </div>
+
+        <!-- Status ------------------------------------------------------ -->
+        <div class="field">
+          <label for="status">Publish</label>
+          <select id="status" name="status">
+            <option value="DRAFT">Draft (default)</option>
+            <option value="ACTIVE">Active now</option>
+            <option value="SCHEDULE">Schedule</option>
+          </select>
+        </div>
+
+        <!-- Schedule date (SCHEDULE only) ------------------------------ -->
+        <div class="field hidden" id="schedule-field">
+          <label for="publishDate">Go live at</label>
+          <input type="datetime-local" id="publishDate" name="publishDate" />
+        </div>
+
+        <!-- Advanced toggles ------------------------------------------- -->
+        <div class="row toggles">
+          <label class="check">
+            <input type="checkbox" id="dryRun" name="dryRun" />
+            Dry run (log calls, change nothing)
+          </label>
+          <label class="check">
+            <input type="checkbox" id="async" name="async" />
+            Async duplicate (poll)
+          </label>
+        </div>
+
+        <button type="submit" id="launch-btn" class="launch">Launch product</button>
+        <div id="form-errors" class="errors hidden"></div>
+      </form>
+
+      <!-- Result ------------------------------------------------------- -->
+      <section id="result" class="card result hidden"></section>
+
+      <!-- Session list ------------------------------------------------- -->
+      <section class="card session hidden" id="session-card">
+        <h2>Launched this session</h2>
+        <ul id="session-list"></ul>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
