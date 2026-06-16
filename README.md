@@ -96,9 +96,17 @@ When you press **Launch product**, the backend runs this sequence
 2. Copy the **Admin API access token** (shown once, starts with `shpat_…`).
 3. Paste it into your local `.env` as `SHOPIFY_ADMIN_TOKEN` (next section).
 
-> **Use the right value.** The token starts with **`shpat_`**. Do **not** use the
-> **API key** or the **API secret key** (`shpss_…`) from the same page — those are
-> for OAuth/webhook verification and will be rejected with a 403 by this tool.
+> **Use the right value.** This must be a **custom-app Admin API access token**.
+> Do **not** use:
+> - the **API secret key** (`shpss_…`) from the same page — that's for
+>   OAuth/webhook verification;
+> - a **Headless / Storefront API** token (public or private) — those only reach
+>   the read-only Storefront API and **cannot** run the Admin mutations
+>   (`productDuplicate`, `productUpdate`, …) this tool needs, even though the
+>   private one is also `shpat_…`-prefixed.
+>
+> The token you want is revealed **once** when you click **Install app** on the
+> custom app's *API credentials* tab.
 
 > You paste this yourself, locally. It is never committed, logged, printed, or
 > shown in the UI. If you ever leak it (e.g. paste it into a chat),
@@ -254,7 +262,7 @@ The **Async duplicate** toggle switches to `synchronous: false` and polls the
 
 | Symptom | Likely cause / fix |
 | --- | --- |
-| `Shopify rejected the request (auth/scope)` (403) | Most often the **wrong token type** — make sure `SHOPIFY_ADMIN_TOKEN` is the **`shpat_…`** Admin API access token, *not* the `shpss_…` API secret key. Otherwise a scope is missing or the token expired: re-check [scopes](#1-create-the-shopify-custom-app--scopes), reinstall the app, update `.env`. |
+| `Request failed (HTTP 403)` … `Likely a bad/expired token, a missing scope, or a network egress/allowlist block` | Check the `body` in the error details. If it says **"Host not in allowlist: …"** the block is your network/firewall (e.g. running inside a sandbox with an egress allowlist), **not** Shopify — allow `*.myshopify.com`. Otherwise it is the **wrong token type** (use the **`shpat_…`** Admin API access token, not the `shpss_…` API secret key or a Headless **Storefront** token), a missing scope, or an expired token. |
 | `Could not find the Online Store publication` | The store has no Online Store channel, or the app lacks `read_publications`. |
 | `MASTER_PRODUCT_ID should look like gid://...` | Wrap the numeric id: `gid://shopify/Product/123`. |
 | Throttled / rate-limited | The client backs off and retries automatically; only fails after repeated throttling. |

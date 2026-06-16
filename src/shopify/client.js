@@ -35,6 +35,16 @@ function backoffMs(attempt) {
   return base + Math.floor(Math.random() * 250);
 }
 
+// Reads a short, token-free snippet of an error response body for diagnostics.
+async function safeBody(res) {
+  try {
+    const t = await res.text();
+    return t.slice(0, 300);
+  } catch {
+    return undefined;
+  }
+}
+
 // Runs a GraphQL operation against the Admin API.
 // Handles: transport errors, HTTP 429/5xx, and Shopify cost-based THROTTLED
 // responses — all retried with exponential backoff. The access token is only
@@ -72,19 +82,24 @@ async function shopifyGraphQL(query, variables = {}, opts = {}) {
         await sleep(backoffMs(attempt));
         continue;
       }
-      throw new ShopifyError(`Shopify returned HTTP ${res.status}.`, { status: res.status });
-    }
-
-    if (res.status === 401 || res.status === 403) {
-      throw new ShopifyError(
-        'Shopify rejected the request (auth/scope). Check the token and app scopes.',
-        { status: res.status }
-      );
+      throw new ShopifyError(`Shopify returned HTTP ${res.status} after retries.`, {
+        status: res.status,
+        body: await safeBody(res),
+      });
     }
 
     if (!res.ok) {
-      throw new ShopifyError(`Unexpected HTTP ${res.status} from Shopify.`, {
+      // Covers 401/403/404/422 etc. The response body never contains our token,
+      // so include a trimmed snippet — it distinguishes a real auth failure from
+      // e.g. a network egress allowlist block ("Host not in allowlist: ...").
+      const body = await safeBody(res);
+      const hint =
+        res.status === 401 || res.status === 403
+          ? 'Likely a bad/expired token, a missing scope, or a network egress/allowlist block.'
+          : 'Unexpected response from the endpoint.';
+      throw new ShopifyError(`Request failed (HTTP ${res.status}). ${hint}`, {
         status: res.status,
+        body,
       });
     }
 
