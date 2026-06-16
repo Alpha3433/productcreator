@@ -160,11 +160,17 @@ PORT=3000
 
 ```bash
 npm install
+npm run check   # read-only: confirms your token works + prints the master product
 npm start
 ```
 
 Open **http://localhost:3000**.
 
+> `npm run check` is the fastest way to answer "does my token work?" — it makes no
+> changes, authenticates, and prints the master product's title/status/template/
+> variants. If it prints a **"Host not in allowlist"** response, that's a network
+> firewall (run it on your own machine), not Shopify.
+>
 > Tip: `npm run dev` restarts the server on file changes.
 
 ---
